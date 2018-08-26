@@ -14,8 +14,11 @@
 //    2 to avoid chroma sampling shifts if chroma is sub-sampled.
 //
 // ============================================================================
+#define SDL_MAIN_HANDLED
+
 #include <ogg/ogg.h>
 #include <theora/theoradec.h>
+#include <SDL2/SDL.h>
 
 #include <cassert>
 #include <cstdio>
@@ -26,11 +29,15 @@ const auto BUFFER_SIZE = 4096;
 
 enum class State { STOPPED, STARTED };
 
+// ==========================================================================
+
 static ogg_stream_state to;
 
 static th_dec_ctx* td = nullptr;
 static th_setup_info* ts = nullptr;
 static int th_header_count = 0;
+
+static SDL_Window* window = nullptr;
 
 // ==========================================================================
 // A helper function to read data block from a file into the OGG container.
@@ -220,6 +227,34 @@ int main()
 
   // TODO init video system.
   // TODO start the main decode loop.
+
+  // ==========================================================================
+  // INIT VIDEO SYSTEM
+  // initialize a video system so we can present our images to the screen. here
+  // we use SDL as an example, but this could be done with other API:s as well.
+  // ==========================================================================
+  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    printf("SDL_Init failed: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  // ==========================================================================
+  // INIT VIDEO SYSTEM WINDOW
+  // construct a window for the video system so we have a surface to draw.
+  // ==========================================================================
+  window = SDL_CreateWindow("Video",
+    SDL_WINDOWPOS_UNDEFINED,
+    SDL_WINDOWPOS_UNDEFINED,
+    800, 600,
+    SDL_WINDOW_SHOWN);
+  if (window == nullptr) {
+    printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+  // release SDL components.
+  SDL_DestroyWindow(window);
+  SDL_Quit();
 
   // free the memory allocated for the OGG stream.
   ogg_stream_clear(&to);

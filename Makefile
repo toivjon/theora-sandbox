@@ -2,10 +2,10 @@
 CXX = g++
 
 # compiler compilation flags.
-CXXFLAGS = -std=c++11 -IC:/Workspace/api/ogg-1.3.3/include -IC:/Workspace/api/theora-1.2/include
+CXXFLAGS = -std=c++11 -IC:/Workspace/api/ogg-1.3.3/include -IC:/Workspace/api/theora-1.2/include -IC:/Workspace/api/sdl2-2.0.8/x86_64-w64-mingw32/include
 
 # linker flags.
-LDFLAGS = -LC:/Workspace/api/ogg-1.3.3/lib64 -LC:/Workspace/api/theora-1.2/lib64 -logg -ltheora
+LDFLAGS = -LC:/Workspace/api/ogg-1.3.3/lib64 -LC:/Workspace/api/theora-1.2/lib64 -LC:/Workspace/api/sdl2-2.0.8/x86_64-w64-mingw32/lib -logg -ltheora -lSDL2main -lSDL2
 
 # the path to source files.
 SRC_PATH = .
