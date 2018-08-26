@@ -38,6 +38,7 @@ static th_setup_info* ts = nullptr;
 static int th_header_count = 0;
 
 static SDL_Window* window = nullptr;
+static SDL_Renderer* renderer = nullptr;
 
 // ==========================================================================
 // A helper function to read data block from a file into the OGG container.
@@ -249,9 +250,20 @@ int main()
     exit(EXIT_FAILURE);
   }
 
+  // ==========================================================================
+  // INIT VIDEO SYSTEM RENDERER
+  // construct a renderer for the created window to support surface drawing.
+  // ==========================================================================
+  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+  if (renderer == nullptr) {
+    printf("SDL_CreateRenderer failed: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
   // TODO start the main decode loop.
 
   // release SDL components.
+  SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
 
