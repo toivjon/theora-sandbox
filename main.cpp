@@ -1,5 +1,8 @@
 // ============================================================================
 //
+// This sandbox is partially based on the following Theora example:
+//  https://github.com/xiph/theora/blob/master/examples/player_example.c
+//
 // Some additional notes about using Theora:
 //
 // 1. Encoded Theora frames must be a multiple of 16 in size. The info header
@@ -14,12 +17,19 @@
 #include <ogg/ogg.h>
 #include <theora/theoradec.h>
 
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 const auto BUFFER_SIZE = 4096;
 
 enum class State { STOPPED, STARTED };
+
+static ogg_stream_state to;
+
+static th_setup_info* ts = nullptr;
+
 
 // ==========================================================================
 // A helper function to read data block from a file into the OGG container.
@@ -72,9 +82,56 @@ int main()
   th_info ti;
   th_info_init(&ti);
 
+  ogg_page page;
   auto state = State::STOPPED;
   while (state == State::STOPPED) {
+    // ========================================================================
+    // READ DATA
+    // here we read data from the source file into the OGG parser. data is read
+    // and handled one OGG buffer at a time. see readData for more details.
+    // ========================================================================
+    auto bytes = readData(*file, oss);
+    if (bytes == 0) {
+      break;
+    }
 
+    while (ogg_sync_pageout(&oss, &page) > 0) {
+      // ======================================================================
+      // DETECT THE END OF THE HEADER SECTION
+      // check whether the iteration has found the end of the OGG file headers.
+      // ======================================================================
+      if (ogg_page_bos(&page) <= 0) {
+        state = State::STARTED;
+        break;
+      }
+
+      // ======================================================================
+      // CREATE AND READ A OGG PACKET FROM A STREAM
+      // create a OGG stream from the target OGG page and provide a OGG packet
+      // from the currently iterated OGG page.
+      // ======================================================================
+      auto result = 0;
+      ogg_packet packet;
+      ogg_stream_state test;
+      result = ogg_stream_init(&test, ogg_page_serialno(&page));
+      assert(result == 0);
+      result = ogg_stream_pagein(&test, &page);
+      assert(result == 0);
+      result = ogg_stream_packetout(&test, &packet);
+      assert(result == 1);
+
+      // ======================================================================
+      // IDENTIFY THE CODEC
+      // identify what kind of content the target OGG contains. here te most
+      // common types would be to check whether we have Theora and/or Vorbis.
+      // ======================================================================
+      if (th_decode_headerin(&ti, &tc, &ts, &packet) >= 0) {
+        printf("the provided test.ogg contains Theora video data.\n");
+        memcpy(&to, &test, sizeof(test));
+      } else {
+        ogg_stream_clear(&test);
+      }
+    }
   }
 
   // free the memory allocated for the header containers.
