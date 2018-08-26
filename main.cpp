@@ -28,6 +28,7 @@ enum class State { STOPPED, STARTED };
 
 static ogg_stream_state to;
 
+static th_dec_ctx* td = nullptr;
 static th_setup_info* ts = nullptr;
 static int th_header_count = 0;
 
@@ -178,6 +179,53 @@ int main()
       }
     }
   }
+
+  // ==========================================================================
+  // ALLOCATE A DECODER INSTANCE
+  // allocate and build a decoder instance that can be used in the decode loop.
+  // ==========================================================================
+  td = th_decode_alloc(&ti, ts);
+  printf("OGG stream %lx is Theora %dx%d %.02f fps\n",
+    to.serialno, ti.pic_width, ti.pic_height,
+    static_cast<double>(ti.fps_numerator/ti.fps_denominator));
+  switch (ti.pixel_fmt) {
+    case TH_PF_420: printf("  4:2:0 video\n"); break;
+    case TH_PF_422: printf("  4:2:2 video\n"); break;
+    case TH_PF_444: printf("  4:4:4 video\n"); break;
+    default:
+      printf("\tvideo is UNKNOWN Chroma sampling\n");
+      break;
+  }
+  if (ti.pic_width != ti.frame_width || ti.pic_height != ti.frame_height) {
+    printf("  frame is %dx%d with offset %d,%d\n",
+      ti.frame_width, ti.frame_height, ti.pic_x, ti.pic_y);
+  }
+
+  // ==========================================================================
+  // DETECT AND SET THE POST-PROCESSING LEVEL
+  // define the level of post-processing to be used with the decode funcions.
+  // here we query the maximum post-processing level and assign it to decoder.
+  // ==========================================================================
+  int pp = 0;
+  int maxPp = 0;
+  int ppInc = 0;
+  th_decode_ctl(td, TH_DECCTL_GET_PPLEVEL_MAX, &maxPp, sizeof(maxPp));
+  printf("maximum post-processing level: %d\n", maxPp);
+  pp = maxPp;
+  th_decode_ctl(td, TH_DECCTL_SET_PPLEVEL, &pp, sizeof(pp));
+  ppInc = 0;
+
+  // release storage used for the decoder setup.
+  th_setup_free(ts);
+
+  // TODO init video system.
+  // TODO start the main decode loop.
+
+  // free the memory allocated for the OGG stream.
+  ogg_stream_clear(&to);
+
+  // free the memory allocated for the decoder context.
+  th_decode_free(td);
 
   // free the memory allocated for the header containers.
   th_info_clear(&ti);
