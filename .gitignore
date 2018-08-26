@@ -1,2 +1,5 @@
 # ignore Visual Studio Code settings folder.
 .vscode
+
+# ignore all OGG files used to testing.
+.ogg
