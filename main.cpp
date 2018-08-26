@@ -227,6 +227,15 @@ int main()
   th_setup_free(ts);
 
   // ==========================================================================
+  // DETECT RENDERING AREA SIZE
+  // calculate the real dimensions required for our rendering system to render
+  // the video data on the screen. remember the section 1 in "additional notes"
+  // at the start of this file
+  // ==========================================================================
+  auto width = (ti.pic_x + ti.pic_width + 1 &~ 1) - (ti.pic_x &~ 1);
+  auto height = (ti.pic_y + ti.pic_height + 1 &~ 1) - (ti.pic_y &~ 1);
+
+  // ==========================================================================
   // INIT VIDEO SYSTEM
   // initialize a video system so we can present our images to the screen. here
   // we use SDL as an example, but this could be done with other API:s as well.
@@ -243,7 +252,7 @@ int main()
   window = SDL_CreateWindow("Video",
     SDL_WINDOWPOS_UNDEFINED,
     SDL_WINDOWPOS_UNDEFINED,
-    800, 600,
+    width, height,
     SDL_WINDOW_SHOWN);
   if (window == nullptr) {
     printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
