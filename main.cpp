@@ -397,9 +397,37 @@ int main()
       // ======================================================================
       if (!videoBufferReady && feof(file)) break;
 
-      // TODO read more data if buffer is not ready.
-      // TODO write video data to surface if it's ready.
+      // ======================================================================
+      // READ MORE DATA
+      // here we read more data from the source OGG container.
+      // ======================================================================
+      if (!videoBufferReady) {
+        readData(*file, oss);
+        while (ogg_sync_pageout(&oss, &page) > 0) {
+          queuePage(page);
+        }
+      }
 
+      // ======================================================================
+      // WRITE VIDEO DATA TO SURFACE
+      // if we have video buffer data ready, we can draw it to our surface so
+      // it can be presented on the screen. note also that we don't want to
+      // show frames that should be presented in the future.
+      // ======================================================================
+      if (videoBufferReady && state == State::DECODING
+          && videobuf_time <= getTime()) {
+        // TODO write video data into the surface.
+        videoBufferReady = false;
+      }
+
+      // ======================================================================
+      // BEGIN PLAYBACK
+      // begin the video playback when we have buffers filled with data or if
+      // we have reached the end of the OGG source file.
+      // ======================================================================
+      if (videoBufferReady || feof(file)) {
+        state = State::DECODING;
+      }
     }
   }
 
