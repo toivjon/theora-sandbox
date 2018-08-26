@@ -21,13 +21,14 @@
 #include <SDL2/SDL.h>
 
 #include <cassert>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 const auto BUFFER_SIZE = 4096;
 
-enum class State { STOPPED, STARTED };
+enum class State { STOPPED, STARTED, DECODING };
 
 // ==========================================================================
 
@@ -40,6 +41,11 @@ static int th_header_count = 0;
 static SDL_Window* window = nullptr;
 static SDL_Renderer* renderer = nullptr;
 static SDL_Texture* texture = nullptr;
+
+static ogg_int64_t videobuf_granulepos = -1;
+static double videobuf_time = 0;
+
+static ogg_int64_t audio_time_calibration = -1;
 
 // ==========================================================================
 // A helper function to read data block from a file into the OGG container.
@@ -67,6 +73,33 @@ static void queuePage(ogg_page& page) {
       // exit(EXIT_FAILURE);
     }
   }
+}
+
+// ==========================================================================
+// A function to get the elapsed milliseconds from the start of the playback.
+// @returns elapsed milliseconds from the start of the first call.
+// ==========================================================================
+static double getTime() {
+  static ogg_int64_t last = 0;
+
+  // resolve the current time in epoch milliseconds.
+  using namespace std::chrono;
+  auto epoch_time = system_clock::now().time_since_epoch();
+  ogg_int64_t now = duration_cast<milliseconds>(epoch_time).count();
+
+  // assign the current time as the last time if we're doing this 1st time.
+  if (audio_time_calibration == -1) {
+    audio_time_calibration = last = now;
+  }
+
+  // check whether to handle suspended playback.
+  if ((now - last) > 1000) {
+    audio_time_calibration += (now - last);
+    last = now;
+  }
+
+  // return the calibrated time from the start of the playback.
+  return (now - audio_time_calibration) * .001;
 }
 
 // ==========================================================================
@@ -299,8 +332,76 @@ int main()
     exit(EXIT_FAILURE);
   }
 
+  // ==========================================================================
+  // START DECODING
+  // start the decoding process with the main loop.
+  // ==========================================================================
+  SDL_Event event;
+  auto frames = 0;
+  auto dropped = 0;
+  auto videoBufferReady = false;
+  while (state != State::STOPPED) {
+    while (SDL_PollEvent(&event) != 0) {
+      switch (event.type) {
+        case SDL_QUIT:
+          state = State::STOPPED;
+          break;
+      }
+    }
 
-  // TODO start the main decode loop.
+    while (videoBufferReady == false) {
+      if (ogg_stream_packetout(&to, &packet) > 0) {
+        // ====================================================================
+        // CHANGE POST-PROCESSING LEVEL
+        // change the post-processing level when there's a pending request.
+        // ====================================================================
+        if (ppInc > 0) {
+          pp += ppInc;
+          th_decode_ctl(td, TH_DECCTL_SET_PPLEVEL, &pp, sizeof(pp));
+          ppInc = 0;
+        }
+
+        // ====================================================================
+        // GRANULEPOS HACK
+        // see Xiph Theora player_example.c lines 755-758 for more details.
+        // ====================================================================
+        if (packet.granulepos >= 0) {
+          th_decode_ctl(td, TH_DECCTL_SET_GRANPOS,
+            &packet.granulepos, sizeof(packet.granulepos));
+        }
+
+        // ====================================================================
+        // SUBMIT DATA TO DECODER
+        // here we pass OGG packet to Theora decoder so it may decode it into
+        // video data that we can later pass to our rendering system. note that
+        // we reduce post-processing when cannot keep in sync with the time.
+        // ====================================================================
+        if (th_decode_packetin(td, &packet, &videobuf_granulepos) == 0) {
+          videobuf_time = th_granule_time(td, videobuf_granulepos);
+          frames++;
+
+          if (videobuf_time <= getTime()) {
+            videoBufferReady = true;
+          } else {
+            ppInc = pp > 0 ? -1 : 0;
+            dropped++;
+          }
+        }
+      } else {
+        break; // end of stream?
+      }
+
+      // ======================================================================
+      // CHECK WHETHER EOF HAS BEEN REACHED
+      // here we check whether we have iterated through the whole source file.
+      // ======================================================================
+      if (!videoBufferReady && feof(file)) break;
+
+      // TODO read more data if buffer is not ready.
+      // TODO write video data to surface if it's ready.
+
+    }
+  }
 
   // release SDL components.
   SDL_DestroyTexture(texture);
