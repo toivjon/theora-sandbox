@@ -225,9 +225,6 @@ int main()
   // release storage used for the decoder setup.
   th_setup_free(ts);
 
-  // TODO init video system.
-  // TODO start the main decode loop.
-
   // ==========================================================================
   // INIT VIDEO SYSTEM
   // initialize a video system so we can present our images to the screen. here
@@ -251,6 +248,8 @@ int main()
     printf("SDL_CreateWindow failed: %s\n", SDL_GetError());
     exit(EXIT_FAILURE);
   }
+
+  // TODO start the main decode loop.
 
   // release SDL components.
   SDL_DestroyWindow(window);
