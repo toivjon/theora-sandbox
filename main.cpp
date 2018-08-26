@@ -29,7 +29,7 @@ enum class State { STOPPED, STARTED };
 static ogg_stream_state to;
 
 static th_setup_info* ts = nullptr;
-
+static int th_header_count = 0;
 
 // ==========================================================================
 // A helper function to read data block from a file into the OGG container.
@@ -44,6 +44,19 @@ static int readData(FILE& file, ogg_sync_state& state) {
     exit(EXIT_FAILURE);
   }
   return bytes;
+}
+
+// ==========================================================================
+// A helper function to add a complete page to OGG bitstream.
+// @param page The page to be added.
+// ==========================================================================
+static void queuePage(ogg_page& page) {
+  if (th_header_count > 0) {
+    if (ogg_stream_pagein(&to, &page) != 0) {
+      // printf("ogg_stream_pagein failed: internal failure occured.\n");
+      // exit(EXIT_FAILURE);
+    }
+  }
 }
 
 // ==========================================================================
@@ -83,6 +96,7 @@ int main()
   th_info_init(&ti);
 
   ogg_page page;
+  ogg_packet packet;
   auto state = State::STOPPED;
   while (state == State::STOPPED) {
     // ========================================================================
@@ -101,6 +115,7 @@ int main()
       // check whether the iteration has found the end of the OGG file headers.
       // ======================================================================
       if (ogg_page_bos(&page) <= 0) {
+        queuePage(page);
         state = State::STARTED;
         break;
       }
@@ -111,7 +126,6 @@ int main()
       // from the currently iterated OGG page.
       // ======================================================================
       auto result = 0;
-      ogg_packet packet;
       ogg_stream_state test;
       result = ogg_stream_init(&test, ogg_page_serialno(&page));
       assert(result == 0);
@@ -125,11 +139,42 @@ int main()
       // identify what kind of content the target OGG contains. here te most
       // common types would be to check whether we have Theora and/or Vorbis.
       // ======================================================================
-      if (th_decode_headerin(&ti, &tc, &ts, &packet) >= 0) {
+      if (!th_header_count && th_decode_headerin(&ti, &tc, &ts, &packet) >= 0) {
         printf("the provided test.ogg contains Theora video data.\n");
         memcpy(&to, &test, sizeof(test));
+        th_header_count = 1;
       } else {
         ogg_stream_clear(&test);
+      }
+    }
+
+    // ========================================================================
+    // PARSE ALL HEADERS
+    // identify and parse rest of the headers from the provided OGG packet.
+    // ========================================================================
+    while (th_header_count && th_header_count < 3) {
+      auto result = ogg_stream_packetout(&to, &packet);
+      if (result < 0) {
+        printf("ogg_stream_packetout failed: failed to get steam packets.\n");
+        exit(EXIT_FAILURE);
+      } else if (!th_decode_headerin(&ti, &tc, &ts, &packet)) {
+        printf("ogg_stream_packetout failed: failed to get Theora headers.\n");
+        exit(EXIT_FAILURE);
+      }
+      th_header_count++;
+
+      // ======================================================================
+      // DEMUX PAGES TO STREAM
+      // insert pages into corresponding streams.
+      // ======================================================================
+      if (ogg_sync_pageout(&oss, &page) > 0) {
+        queuePage(page);
+      } else {
+        bytes = readData(*file, oss);
+        if (bytes == 0) {
+          printf("readData failed: EOF while searching code headers.\n");
+          exit(EXIT_FAILURE);
+        }
       }
     }
   }
