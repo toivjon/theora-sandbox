@@ -39,6 +39,7 @@ static int th_header_count = 0;
 
 static SDL_Window* window = nullptr;
 static SDL_Renderer* renderer = nullptr;
+static SDL_Texture* texture = nullptr;
 
 // ==========================================================================
 // A helper function to read data block from a file into the OGG container.
@@ -269,9 +270,40 @@ int main()
     exit(EXIT_FAILURE);
   }
 
+  // ==========================================================================
+  // CREATE RENDERING TEXTURE
+  // create a texture that can be filled with our video data. note that we need
+  // to create the texture buffer based on the video pixel format type.
+  // ==========================================================================
+  auto format = SDL_PIXELFORMAT_UNKNOWN;
+  switch (ti.pixel_fmt) {
+    case TH_PF_420:
+      format = SDL_PIXELFORMAT_YV12;
+      break;
+    case TH_PF_422:
+      format = SDL_PIXELFORMAT_YUY2;
+      break;
+    case TH_PF_444:
+      printf("YUV 4:4:4 is not currently supported.\n");
+      exit(EXIT_FAILURE);
+    default:
+      printf("Unsupport pixel format!\n");
+      exit(EXIT_FAILURE);
+  }
+  texture = SDL_CreateTexture(
+    renderer, format,
+    SDL_TEXTUREACCESS_STREAMING,
+    width, height);
+  if (texture == nullptr) {
+    printf("SDL_CreateTexture failed: %s\n", SDL_GetError());
+    exit(EXIT_FAILURE);
+  }
+
+
   // TODO start the main decode loop.
 
   // release SDL components.
+  SDL_DestroyTexture(texture);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
